@@ -1,0 +1,52 @@
+<resources>
+    <string name="app_name">Itunes Song Search</string>
+
+    <!-- Splash Screen -->
+    <string name="splash_icon_description">Itunes Song Search logo</string>
+
+    <!-- Songs Screen -->
+    <string name="songs_title">Songs</string>
+    <string name="search_songs">Search songs</string>
+    <string name="search_placeholder">Search</string>
+    <string name="clear_search">Clear search</string>
+    <string name="recently_played">Recently Played</string>
+    <string name="welcome_message">Welcome! Search for your favorite songs above</string>
+    <string name="no_search_results">No songs found for \"%1$s\"</string>
+    <string name="error_message_description">Error message</string>
+    <string name="unknown_error">Unknown error</string>
+
+    <!-- Player Screen -->
+    <string name="player_screen_description">Player Screen</string>
+    <string name="now_playing">Now playing</string>
+    <string name="navigate_back">Navigate back</string>
+    <string name="more_options">More options</string>
+    <string name="album_artwork_description">%1$s album artwork</string>
+    <string name="artist_collection_format">%1$s</string>
+    <string name="song_progress">Song progress</string>
+    <string name="previous_song">Previous song</string>
+    <string name="next_song">Next song</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="repeat">Repeat</string>
+
+    <!-- Album Screen -->
+    <string name="album_screen_description">Album Screen</string>
+    <string name="album_cover_description">%1$s cover</string>
+    <string name="song_by_artist">%1$s by %2$s</string>
+    <string name="error_pull_to_refresh">Something went wrong.\nPull down to try again.</string>
+    <string name="error_loading_more">Couldn\'t load more results.\nPull down to try again.</string>
+    <string name="album_sync_failed">Couldn\'t refresh. Showing cached songs.\nPull down to try again.</string>
+    <string name="album_cached_loading">Loading latest songs…</string>
+
+    <!-- Bottom Sheet -->
+    <string name="song_options_description">Song options for %1$s</string>
+    <string name="view_album">View album</string>
+    <string name="view_album_description">View album %1$s</string>
+
+    <!-- Song List Item -->
+    <string name="artwork_description">%1$s artwork</string>
+    <string name="more_options_description">More options for %1$s</string>
+
+    <!-- Connectivity -->
+    <string name="no_internet_connection">No internet connection</string>
+</resources>
