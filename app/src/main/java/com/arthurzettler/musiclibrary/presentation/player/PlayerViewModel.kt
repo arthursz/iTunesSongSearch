@@ -11,10 +11,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+private const val ProgressPollIntervalMs = 200L
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -26,18 +29,16 @@ class PlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
-    private var pausedByNavigation = false
-    private var pausedPosition = 0L
-
-    val playbackProgress: Flow<PlaybackProgress> = flow {
-        while (true) {
-            emit(
-                PlaybackProgress(
-                    currentPosition = audioPlayer.currentPosition,
-                    duration = audioPlayer.duration
-                )
-            )
-            delay(200)
+    val playbackProgress: Flow<PlaybackProgress> = audioPlayer.isPlaying.flatMapLatest { playing ->
+        flow {
+            if (!playing) {
+                emit(currentPlaybackProgress())
+                return@flow
+            }
+            while (true) {
+                emit(currentPlaybackProgress())
+                delay(ProgressPollIntervalMs)
+            }
         }
     }
 
@@ -49,6 +50,11 @@ class PlayerViewModel @Inject constructor(
             observeSongEnded()
         }
     }
+
+    private fun currentPlaybackProgress() = PlaybackProgress(
+        currentPosition = audioPlayer.currentPosition,
+        duration = audioPlayer.duration
+    )
 
     private fun loadPlaylist() {
         viewModelScope.launch {
@@ -112,22 +118,28 @@ class PlayerViewModel @Inject constructor(
 
     fun pauseForNavigation() {
         if (audioPlayer.isPlaying.value) {
-            pausedPosition = audioPlayer.currentPosition
+            val position = audioPlayer.currentPosition
             audioPlayer.pause()
-            pausedByNavigation = true
-            _uiState.update { it.copy(currentPosition = pausedPosition) }
+            _uiState.update {
+                it.copy(
+                    pausedByNavigation = true,
+                    pausedPosition = position,
+                    currentPosition = position
+                )
+            }
         }
     }
 
     fun resumeFromNavigation() {
-        if (pausedByNavigation) {
-            val state = _uiState.value.screenState
-            if (state is PlayerScreenState.Ready && state.currentSong.previewUrl.isNotBlank()) {
-                audioPlayer.play(state.currentSong.previewUrl)
-                audioPlayer.seekTo(pausedPosition)
-            }
-            pausedByNavigation = false
+        val state = _uiState.value
+        if (!state.pausedByNavigation) return
+
+        val screenState = state.screenState
+        if (screenState is PlayerScreenState.Ready && screenState.currentSong.previewUrl.isNotBlank()) {
+            audioPlayer.play(screenState.currentSong.previewUrl)
+            audioPlayer.seekTo(state.pausedPosition)
         }
+        _uiState.update { it.copy(pausedByNavigation = false) }
     }
 
     fun stopPlayback() {

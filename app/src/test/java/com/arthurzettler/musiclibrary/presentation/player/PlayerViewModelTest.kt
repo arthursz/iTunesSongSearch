@@ -289,6 +289,8 @@ class PlayerViewModelTest {
         viewModel.pauseForNavigation()
 
         verify { audioPlayer.pause() }
+        assertTrue(viewModel.uiState.value.pausedByNavigation)
+        assertEquals(0L, viewModel.uiState.value.pausedPosition)
     }
 
     @Test
@@ -300,10 +302,12 @@ class PlayerViewModelTest {
         }
     ) {
         viewModel.pauseForNavigation()
+        assertEquals(15000L, viewModel.uiState.value.pausedPosition)
         viewModel.resumeFromNavigation()
 
         verify { audioPlayer.play(fakeSong.previewUrl) }
         verify { audioPlayer.seekTo(15000L) }
+        assertFalse(viewModel.uiState.value.pausedByNavigation)
     }
 
     @Test

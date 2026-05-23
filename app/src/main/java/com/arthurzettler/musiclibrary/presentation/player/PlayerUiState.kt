@@ -7,7 +7,9 @@ data class PlayerUiState(
     val isPlaying: Boolean = false,
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
-    val isRepeatEnabled: Boolean = false
+    val isRepeatEnabled: Boolean = false,
+    val pausedByNavigation: Boolean = false,
+    val pausedPosition: Long = 0L
 )
 
 sealed interface PlayerScreenState {

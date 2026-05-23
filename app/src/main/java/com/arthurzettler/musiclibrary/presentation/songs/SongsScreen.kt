@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +69,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.arthurzettler.musiclibrary.R
 import com.arthurzettler.musiclibrary.domain.model.Song
@@ -186,25 +189,11 @@ internal fun SongsSearchResultsContent(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     LazyColumn(modifier = modifier.fillMaxSize()) {
-        if (showInlineError) {
-            item(key = "search_error_banner") {
-                Text(
-                    text = stringResource(
-                        if (showAppendError) {
-                            R.string.error_loading_more
-                        } else {
-                            R.string.error_pull_to_refresh
-                        }
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colorScheme.error,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
-            }
-        }
+        searchErrorBanner(
+            showInlineError = showInlineError,
+            showAppendError = showAppendError,
+            errorColor = colorScheme.error
+        )
         itemsIndexed(items = songs, key = { _, song -> song.trackId }) { index, song ->
             SongListItem(
                 song = song,
@@ -212,23 +201,183 @@ internal fun SongsSearchResultsContent(
                 onMoreClick = { onSongMoreClick(song) }
             )
         }
-        if (showAppendLoading) {
-            item(key = "search_append_loading") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = colorScheme.primary
-                    )
+        searchAppendLoading(
+            showAppendLoading = showAppendLoading,
+            indicatorColor = colorScheme.primary
+        )
+        searchListFooter()
+    }
+}
+
+@Composable
+internal fun SongsSearchResultsContent(
+    pagingItems: LazyPagingItems<Song>,
+    listState: LazyListState,
+    showInlineError: Boolean,
+    showAppendError: Boolean,
+    showAppendLoading: Boolean,
+    onSongClick: (Int) -> Unit,
+    onSongMoreClick: (Song) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxSize()
+    ) {
+        searchErrorBanner(
+            showInlineError = showInlineError,
+            showAppendError = showAppendError,
+            errorColor = colorScheme.error
+        )
+        items(
+            count = pagingItems.itemCount,
+            key = { index -> pagingItems.peek(index)?.trackId ?: index }
+        ) { index ->
+            val song = pagingItems[index] ?: return@items
+            SongListItem(
+                song = song,
+                onClick = { onSongClick(index) },
+                onMoreClick = { onSongMoreClick(song) }
+            )
+        }
+        searchAppendLoading(
+            showAppendLoading = showAppendLoading,
+            indicatorColor = colorScheme.primary
+        )
+        searchListFooter()
+    }
+}
+
+private fun LazyListScope.searchErrorBanner(
+    showInlineError: Boolean,
+    showAppendError: Boolean,
+    errorColor: Color
+) {
+    if (!showInlineError) return
+    item(key = "search_error_banner") {
+        Text(
+            text = stringResource(
+                if (showAppendError) {
+                    R.string.error_loading_more
+                } else {
+                    R.string.error_pull_to_refresh
                 }
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = errorColor,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        )
+    }
+}
+
+private fun LazyListScope.searchAppendLoading(
+    showAppendLoading: Boolean,
+    indicatorColor: Color
+) {
+    if (!showAppendLoading) return
+    item(key = "search_append_loading") {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = indicatorColor
+            )
+        }
+    }
+}
+
+private fun LazyListScope.searchListFooter() {
+    item(key = "search_footer") {
+        Spacer(modifier = Modifier.height(ListBottomSpacing))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SongsSearchResults(
+    searchQuery: String,
+    pagingItems: LazyPagingItems<Song>,
+    onSongClick: (Int) -> Unit,
+    onSongMoreClick: (Song) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    key(searchQuery) {
+        val searchListState = rememberLazyListState()
+        var scrollToTopOnNextResults by remember(searchQuery) {
+            mutableStateOf(true)
+        }
+
+        val refreshLoadState = pagingItems.loadState.refresh
+        val isNearListEnd by remember {
+            derivedStateOf {
+                val layoutInfo = searchListState.layoutInfo
+                val total = layoutInfo.totalItemsCount
+                if (total == 0) return@derivedStateOf false
+                val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                lastVisible >= total - 3
             }
         }
-        item(key = "search_footer") {
-            Spacer(modifier = Modifier.height(ListBottomSpacing))
+        val searchUiState = SearchUiState.from(
+            refreshLoadState = refreshLoadState,
+            appendLoadState = pagingItems.loadState.append,
+            itemCount = pagingItems.itemCount,
+            searchQuery = searchQuery,
+            isNearListEnd = isNearListEnd
+        )
+
+        LaunchedEffect(searchQuery) {
+            scrollToTopOnNextResults = true
+            snapshotFlow {
+                pagingItems.loadState.refresh to pagingItems.itemCount
+            }
+                .filter { (refresh, count) ->
+                    refresh is LoadState.NotLoading && count > 0
+                }
+                .first()
+            searchListState.scrollToItem(0)
+            scrollToTopOnNextResults = false
+        }
+
+        LaunchedEffect(refreshLoadState) {
+            when (refreshLoadState) {
+                is LoadState.Loading -> scrollToTopOnNextResults = true
+                is LoadState.NotLoading -> {
+                    if (scrollToTopOnNextResults && pagingItems.itemCount > 0) {
+                        searchListState.scrollToItem(0)
+                        scrollToTopOnNextResults = false
+                    }
+                }
+                else -> Unit
+            }
+        }
+
+        PullToRefreshBox(
+            isRefreshing = searchUiState.isPullRefreshing,
+            onRefresh = { pagingItems.refresh() },
+            modifier = modifier
+        ) {
+            when {
+                searchUiState.isInitialLoad -> SongsSearchLoadingContent()
+                searchUiState.showBlockingError -> SongsSearchBlockingErrorContent()
+                searchUiState.showEmptyResults -> SongsSearchEmptyContent(query = searchQuery)
+                else -> SongsSearchResultsContent(
+                    pagingItems = pagingItems,
+                    listState = searchListState,
+                    showInlineError = searchUiState.showInlineError,
+                    showAppendError = searchUiState.hasAppendError,
+                    showAppendLoading = searchUiState.showAppendLoading,
+                    onSongClick = onSongClick,
+                    onSongMoreClick = onSongMoreClick
+                )
+            }
         }
     }
 }
@@ -447,150 +596,21 @@ fun SongsScreen(
                 }
 
                 is SongsScreenState.Searching -> {
-                    key(uiState.searchQuery) {
-                    val searchListState = rememberLazyListState()
-                    var scrollToTopOnNextResults by remember(uiState.searchQuery) {
-                        mutableStateOf(true)
-                    }
-
-                    val refreshLoadState = pagingItems.loadState.refresh
-                    val appendLoadState = pagingItems.loadState.append
-                    val hasRefreshError = refreshLoadState is LoadState.Error
-                    val hasAppendError = appendLoadState is LoadState.Error
-                    val hasListError = hasRefreshError || hasAppendError
-                    val showEmptyResults = refreshLoadState is LoadState.NotLoading &&
-                        appendLoadState is LoadState.NotLoading &&
-                        pagingItems.itemCount == 0 &&
-                        uiState.searchQuery.isNotBlank() &&
-                        !hasListError
-                    val isInitialLoad = refreshLoadState is LoadState.Loading &&
-                        pagingItems.itemCount == 0
-                    val isPullRefreshing = refreshLoadState is LoadState.Loading &&
-                        pagingItems.itemCount > 0
-                    val showBlockingError = pagingItems.itemCount == 0 && hasListError
-                    val showInlineError = pagingItems.itemCount > 0 && hasListError
-                    val isNearListEnd by remember {
-                        derivedStateOf {
-                            val layoutInfo = searchListState.layoutInfo
-                            val total = layoutInfo.totalItemsCount
-                            if (total == 0) return@derivedStateOf false
-                            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                            lastVisible >= total - 3
-                        }
-                    }
-                    val showAppendLoading = appendLoadState is LoadState.Loading &&
-                        refreshLoadState is LoadState.NotLoading &&
-                        pagingItems.itemCount > 0 &&
-                        !hasAppendError &&
-                        isNearListEnd
-
-                    LaunchedEffect(uiState.searchQuery) {
-                        scrollToTopOnNextResults = true
-                        snapshotFlow {
-                            pagingItems.loadState.refresh to pagingItems.itemCount
-                        }
-                            .filter { (refresh, count) ->
-                                refresh is LoadState.NotLoading && count > 0
-                            }
-                            .first()
-                        searchListState.scrollToItem(0)
-                        scrollToTopOnNextResults = false
-                    }
-
-                    LaunchedEffect(refreshLoadState) {
-                        when (refreshLoadState) {
-                            is LoadState.Loading -> scrollToTopOnNextResults = true
-                            is LoadState.NotLoading -> {
-                                if (scrollToTopOnNextResults && pagingItems.itemCount > 0) {
-                                    searchListState.scrollToItem(0)
-                                    scrollToTopOnNextResults = false
-                                }
-                            }
-                            else -> Unit
-                        }
-                    }
-
-                    PullToRefreshBox(
-                        isRefreshing = isPullRefreshing,
-                        onRefresh = { pagingItems.refresh() },
+                    SongsSearchResults(
+                        searchQuery = uiState.searchQuery,
+                        pagingItems = pagingItems,
+                        onSongClick = { index ->
+                            viewModel.onSongSelected(
+                                pagingItems.itemSnapshotList.items,
+                                index
+                            )
+                            onNavigateToPlayer()
+                        },
+                        onSongMoreClick = { song -> selectedSongTrackId = song.trackId },
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                    ) {
-                        when {
-                            isInitialLoad -> SongsSearchLoadingContent()
-
-                            showBlockingError -> SongsSearchBlockingErrorContent()
-
-                            showEmptyResults -> SongsSearchEmptyContent(query = uiState.searchQuery)
-
-                            else -> {
-                                LazyColumn(
-                                    state = searchListState,
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    if (showInlineError) {
-                                        item(key = "search_error_banner") {
-                                            Text(
-                                                text = stringResource(
-                                                    if (hasAppendError) {
-                                                        R.string.error_loading_more
-                                                    } else {
-                                                        R.string.error_pull_to_refresh
-                                                    }
-                                                ),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = colorScheme.error,
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                                            )
-                                        }
-                                    }
-
-                                    items(
-                                        count = pagingItems.itemCount,
-                                        key = { index -> pagingItems.peek(index)?.trackId ?: index }
-                                    ) { index ->
-                                        val song = pagingItems[index] ?: return@items
-                                        SongListItem(
-                                            song = song,
-                                            onClick = {
-                                                viewModel.onSongSelected(
-                                                    pagingItems.itemSnapshotList.items,
-                                                    index
-                                                )
-                                                onNavigateToPlayer()
-                                            },
-                                            onMoreClick = { selectedSongTrackId = song.trackId }
-                                        )
-                                    }
-
-                                    if (showAppendLoading) {
-                                        item(key = "search_append_loading") {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(16.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(24.dp),
-                                                    color = colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    item(key = "search_footer") {
-                                        Spacer(modifier = Modifier.height(ListBottomSpacing))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    }
+                    )
                 }
             }
         }
