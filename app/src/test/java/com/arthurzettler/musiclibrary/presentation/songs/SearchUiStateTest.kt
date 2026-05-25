@@ -15,11 +15,30 @@ class SearchUiStateTest {
             appendLoadState = LoadState.NotLoading(endOfPaginationReached = false),
             itemCount = 0,
             searchQuery = "daft punk",
-            isNearListEnd = false
+            isNearListEnd = false,
+            hasSettledInitialLoad = false,
+            isManualRefresh = false
         )
 
         assertTrue(state.isInitialLoad)
+        assertFalse(state.isPullRefreshing)
         assertFalse(state.showEmptyResults)
+    }
+
+    @Test
+    fun `from derives pull refreshing when retrying after error with no items`() {
+        val state = SearchUiState.from(
+            refreshLoadState = LoadState.Loading,
+            appendLoadState = LoadState.NotLoading(endOfPaginationReached = false),
+            itemCount = 0,
+            searchQuery = "daft punk",
+            isNearListEnd = false,
+            hasSettledInitialLoad = true,
+            isManualRefresh = true
+        )
+
+        assertTrue(state.isPullRefreshing)
+        assertFalse(state.isInitialLoad)
     }
 
     @Test
@@ -29,7 +48,9 @@ class SearchUiStateTest {
             appendLoadState = LoadState.NotLoading(endOfPaginationReached = true),
             itemCount = 0,
             searchQuery = "zzzznotfound",
-            isNearListEnd = false
+            isNearListEnd = false,
+            hasSettledInitialLoad = true,
+            isManualRefresh = false
         )
 
         assertTrue(state.showEmptyResults)
@@ -43,7 +64,9 @@ class SearchUiStateTest {
             appendLoadState = LoadState.NotLoading(endOfPaginationReached = false),
             itemCount = 0,
             searchQuery = "daft punk",
-            isNearListEnd = false
+            isNearListEnd = false,
+            hasSettledInitialLoad = true,
+            isManualRefresh = false
         )
 
         assertTrue(state.showBlockingError)
@@ -57,7 +80,9 @@ class SearchUiStateTest {
             appendLoadState = LoadState.Loading,
             itemCount = 20,
             searchQuery = "daft punk",
-            isNearListEnd = true
+            isNearListEnd = true,
+            hasSettledInitialLoad = true,
+            isManualRefresh = false
         )
 
         assertTrue(state.showAppendLoading)

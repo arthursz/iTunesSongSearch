@@ -23,10 +23,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,10 +46,6 @@ import com.arthurzettler.musiclibrary.presentation.components.SongListItemConfig
 import com.arthurzettler.musiclibrary.ui.preview.previewPlaylist
 import com.arthurzettler.musiclibrary.ui.preview.previewSong
 import com.arthurzettler.musiclibrary.ui.theme.MusicLibraryTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-
-private const val PullRefreshIndicatorDurationMs = 1500L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,22 +56,12 @@ fun AlbumScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pullRefreshState = rememberPullToRefreshState()
-    var isRefreshing by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     AlbumScreenScaffold(
         uiState = uiState,
-        isRefreshing = isRefreshing,
         pullRefreshState = pullRefreshState,
         onNavigateBack = onNavigateBack,
-        onRefresh = {
-            isRefreshing = true
-            viewModel.refresh()
-            scope.launch {
-                delay(PullRefreshIndicatorDurationMs)
-                isRefreshing = false
-            }
-        },
+        onRefresh = viewModel::refresh,
         onSongSelected = { songs, index ->
             viewModel.onSongSelected(songs, index)
             onNavigateToPlayer()
@@ -90,7 +73,6 @@ fun AlbumScreen(
 @Composable
 internal fun AlbumScreenScaffold(
     uiState: AlbumUiState,
-    isRefreshing: Boolean,
     pullRefreshState: androidx.compose.material3.pulltorefresh.PullToRefreshState,
     onNavigateBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -126,7 +108,7 @@ internal fun AlbumScreenScaffold(
 
             else -> {
                 PullToRefreshBox(
-                    isRefreshing = isRefreshing,
+                    isRefreshing = uiState.isRefreshing,
                     onRefresh = onRefresh,
                     state = pullRefreshState,
                     modifier = Modifier
@@ -136,7 +118,7 @@ internal fun AlbumScreenScaffold(
                     AlbumScreenBody(
                         uiState = uiState,
                         screenState = state,
-                        isPullRefreshing = isRefreshing,
+                        isPullRefreshing = uiState.isRefreshing,
                         onSongSelected = onSongSelected
                     )
                 }
@@ -217,7 +199,7 @@ internal fun AlbumScreenBody(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                if (screenState.syncError != null) {
+                if (screenState.syncError != null && !isPullRefreshing) {
                     item(key = "album_sync_error") {
                         Text(
                             text = stringResource(R.string.album_sync_failed),
@@ -229,7 +211,7 @@ internal fun AlbumScreenBody(
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         )
                     }
-                } else if (screenState.isStale) {
+                } else if (screenState.isStale && !isPullRefreshing) {
                     item(key = "album_cached_hint") {
                         Text(
                             text = stringResource(R.string.album_cached_loading),
@@ -290,7 +272,6 @@ private fun AlbumScreenStatePreview(
                 artworkUrl = previewSong.artworkUrl,
                 screenState = screenState
             ),
-            isRefreshing = false,
             pullRefreshState = rememberPullToRefreshState(),
             onNavigateBack = {},
             onRefresh = {},

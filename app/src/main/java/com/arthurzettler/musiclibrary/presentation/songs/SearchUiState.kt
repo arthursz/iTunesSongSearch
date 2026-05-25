@@ -19,11 +19,14 @@ internal data class SearchUiState(
             appendLoadState: LoadState,
             itemCount: Int,
             searchQuery: String,
-            isNearListEnd: Boolean
+            isNearListEnd: Boolean,
+            hasSettledInitialLoad: Boolean,
+            isManualRefresh: Boolean
         ): SearchUiState {
             val hasRefreshError = refreshLoadState is LoadState.Error
             val hasAppendError = appendLoadState is LoadState.Error
             val hasListError = hasRefreshError || hasAppendError
+            val isRefreshLoading = refreshLoadState is LoadState.Loading
             return SearchUiState(
                 hasRefreshError = hasRefreshError,
                 hasAppendError = hasAppendError,
@@ -33,8 +36,11 @@ internal data class SearchUiState(
                     itemCount == 0 &&
                     searchQuery.isNotBlank() &&
                     !hasListError,
-                isInitialLoad = refreshLoadState is LoadState.Loading && itemCount == 0,
-                isPullRefreshing = refreshLoadState is LoadState.Loading && itemCount > 0,
+                isInitialLoad = isRefreshLoading &&
+                    itemCount == 0 &&
+                    !hasSettledInitialLoad &&
+                    !isManualRefresh,
+                isPullRefreshing = isRefreshLoading && (itemCount > 0 || isManualRefresh),
                 showBlockingError = itemCount == 0 && hasListError,
                 showInlineError = itemCount > 0 && hasListError,
                 showAppendLoading = appendLoadState is LoadState.Loading &&

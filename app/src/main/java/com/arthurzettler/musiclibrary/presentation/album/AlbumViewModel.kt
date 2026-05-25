@@ -53,7 +53,8 @@ class AlbumViewModel @Inject constructor(
 
     fun refresh() {
         when (_uiState.value.screenState) {
-            is AlbumScreenState.Success -> fetchAlbumSongs(showFullScreenLoading = false)
+            is AlbumScreenState.Success,
+            is AlbumScreenState.Error -> fetchAlbumSongs(showFullScreenLoading = false)
             else -> loadAlbumSongs()
         }
     }
@@ -67,7 +68,9 @@ class AlbumViewModel @Inject constructor(
     private fun fetchAlbumSongs(showFullScreenLoading: Boolean) {
         fetchJob?.cancel()
         if (showFullScreenLoading) {
-            _uiState.update { it.copy(screenState = AlbumScreenState.Loading) }
+            _uiState.update { it.copy(screenState = AlbumScreenState.Loading, isRefreshing = false) }
+        } else {
+            _uiState.update { it.copy(isRefreshing = true) }
         }
         fetchJob = viewModelScope.launch {
             songRepository.getAlbumSongs(collectionId).collect { outcome ->
@@ -79,7 +82,8 @@ class AlbumViewModel @Inject constructor(
                                     songs = outcome.data,
                                     isStale = false,
                                     syncError = null
-                                )
+                                ),
+                                isRefreshing = false
                             )
                         }
                     }
@@ -103,12 +107,16 @@ class AlbumViewModel @Inject constructor(
                                 it.copy(
                                     screenState = current.copy(
                                         syncError = outcome.message
-                                    )
+                                    ),
+                                    isRefreshing = false
                                 )
                             }
                         } else {
                             _uiState.update {
-                                it.copy(screenState = AlbumScreenState.Error(outcome.message))
+                                it.copy(
+                                    screenState = AlbumScreenState.Error(outcome.message),
+                                    isRefreshing = false
+                                )
                             }
                         }
                     }

@@ -11,6 +11,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -148,6 +149,77 @@ class AlbumViewModelTest {
 
         val state = viewModel.uiState.value.screenState as AlbumScreenState.Success
         assertEquals(1, state.songs.size)
+    }
+
+    @Test
+    fun `refresh keeps isRefreshing true until network completes after stale`() = runTest {
+        val songs = listOf(fakeSong)
+        every { songRepository.getAlbumSongs(200L) } returns flowOf(Outcome.Success(songs))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val refreshFlow = MutableSharedFlow<Outcome<List<Song>>>(extraBufferCapacity = 2)
+        every { songRepository.getAlbumSongs(200L) } returns refreshFlow
+
+        viewModel.refresh()
+        testDispatcher.scheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.isRefreshing)
+
+        refreshFlow.emit(Outcome.Stale(songs))
+        testDispatcher.scheduler.runCurrent()
+
+        assertTrue(viewModel.uiState.value.isRefreshing)
+        val staleState = viewModel.uiState.value.screenState as AlbumScreenState.Success
+        assertTrue(staleState.isStale)
+
+        refreshFlow.emit(Outcome.Success(songs))
+        advanceUntilIdle()
+
+        val finalState = viewModel.uiState.value.screenState as AlbumScreenState.Success
+        assertEquals(false, finalState.isStale)
+        assertTrue(!viewModel.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun `refresh from error uses pull indicator instead of full screen loading`() = runTest {
+        every { songRepository.getAlbumSongs(200L) } returns flowOf(
+            Outcome.Error("Network error")
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.screenState is AlbumScreenState.Error)
+
+        val refreshFlow = MutableSharedFlow<Outcome<List<Song>>>(extraBufferCapacity = 1)
+        every { songRepository.getAlbumSongs(200L) } returns refreshFlow
+
+        viewModel.refresh()
+        testDispatcher.scheduler.runCurrent()
+
+        assertTrue(viewModel.uiState.value.isRefreshing)
+        assertTrue(viewModel.uiState.value.screenState is AlbumScreenState.Error)
+    }
+
+    @Test
+    fun `refresh clears isRefreshing after stale then error`() = runTest {
+        val songs = listOf(fakeSong)
+        every { songRepository.getAlbumSongs(200L) } returns flowOf(Outcome.Success(songs))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        every { songRepository.getAlbumSongs(200L) } returns flowOf(
+            Outcome.Stale(songs),
+            Outcome.Error("Network error")
+        )
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertTrue(!viewModel.uiState.value.isRefreshing)
+        val state = viewModel.uiState.value.screenState as AlbumScreenState.Success
+        assertEquals("Network error", state.syncError)
     }
 
     @Test

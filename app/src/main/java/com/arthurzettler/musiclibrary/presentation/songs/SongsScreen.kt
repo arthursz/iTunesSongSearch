@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -314,6 +315,9 @@ private fun SongsSearchResults(
         var scrollToTopOnNextResults by remember(searchQuery) {
             mutableStateOf(true)
         }
+        var isManualRefresh by remember(searchQuery) { mutableStateOf(false) }
+        var hasSettledInitialLoad by remember(searchQuery) { mutableStateOf(false) }
+        val pullRefreshState = rememberPullToRefreshState()
 
         val refreshLoadState = pagingItems.loadState.refresh
         val isNearListEnd by remember {
@@ -330,7 +334,9 @@ private fun SongsSearchResults(
             appendLoadState = pagingItems.loadState.append,
             itemCount = pagingItems.itemCount,
             searchQuery = searchQuery,
-            isNearListEnd = isNearListEnd
+            isNearListEnd = isNearListEnd,
+            hasSettledInitialLoad = hasSettledInitialLoad,
+            isManualRefresh = isManualRefresh
         )
 
         LaunchedEffect(searchQuery) {
@@ -350,28 +356,39 @@ private fun SongsSearchResults(
             when (refreshLoadState) {
                 is LoadState.Loading -> scrollToTopOnNextResults = true
                 is LoadState.NotLoading -> {
+                    isManualRefresh = false
+                    hasSettledInitialLoad = true
                     if (scrollToTopOnNextResults && pagingItems.itemCount > 0) {
                         searchListState.scrollToItem(0)
                         scrollToTopOnNextResults = false
                     }
                 }
-                else -> Unit
+                is LoadState.Error -> {
+                    isManualRefresh = false
+                    hasSettledInitialLoad = true
+                }
             }
         }
 
         PullToRefreshBox(
             isRefreshing = searchUiState.isPullRefreshing,
-            onRefresh = { pagingItems.refresh() },
+            onRefresh = {
+                isManualRefresh = true
+                pagingItems.refresh()
+            },
+            state = pullRefreshState,
             modifier = modifier
         ) {
             when {
                 searchUiState.isInitialLoad -> SongsSearchLoadingContent()
-                searchUiState.showBlockingError -> SongsSearchBlockingErrorContent()
+                searchUiState.showBlockingError && !searchUiState.isPullRefreshing -> {
+                    SongsSearchBlockingErrorContent()
+                }
                 searchUiState.showEmptyResults -> SongsSearchEmptyContent(query = searchQuery)
                 else -> SongsSearchResultsContent(
                     pagingItems = pagingItems,
                     listState = searchListState,
-                    showInlineError = searchUiState.showInlineError,
+                    showInlineError = searchUiState.showInlineError && !searchUiState.isPullRefreshing,
                     showAppendError = searchUiState.hasAppendError,
                     showAppendLoading = searchUiState.showAppendLoading,
                     onSongClick = onSongClick,

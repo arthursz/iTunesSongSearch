@@ -6,7 +6,8 @@ data class AlbumUiState(
     val albumName: String = "",
     val artistName: String = "",
     val artworkUrl: String = "",
-    val screenState: AlbumScreenState = AlbumScreenState.Loading
+    val screenState: AlbumScreenState = AlbumScreenState.Loading,
+    val isRefreshing: Boolean = false
 )
 
 sealed interface AlbumScreenState {
